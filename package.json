@@ -1,0 +1,19 @@
+{
+  "name": "zetamac-competitive",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace @zmc/web",
+    "build": "npm run build --workspace @zmc/web",
+    "preview": "npm run preview --workspace @zmc/web",
+    "check": "npm run check --workspace @zmc/web",
+    "test": "npm run test --workspace @zmc/shared"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}

@@ -1,0 +1,24 @@
+node_modules/
+dist/
+coverage/
+
+# Vite reads .env.development, .env.production and .env.[mode].local too, so
+# ignore the whole family rather than two names. The Supabase service-role key
+# lands in one of these in M2 — leaking it is a full database compromise.
+.env
+.env.*
+!.env.example
+
+*.log
+*.tsbuildinfo
+.vite/
+vite.config.ts.timestamp-*
+
+# Machine-local Claude Code permissions. Currently only ignored by a global
+# config on this machine, so it would be committed from any other checkout.
+.claude/settings.local.json
+
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/

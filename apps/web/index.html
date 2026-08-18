@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>zetamac competitive</title>
+    <script>
+      // Applied before first paint so a custom background never flashes the default.
+      try {
+        const s = JSON.parse(localStorage.getItem('zmc:settings') || '{}');
+        const r = document.documentElement.style;
+        if (s.background) r.setProperty('--bg', s.background);
+        if (s.foreground) r.setProperty('--fg', s.foreground);
+        if (s.accent) r.setProperty('--accent', s.accent);
+        if (s.fontFamily) r.setProperty('--font', s.fontFamily);
+      } catch {}
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
