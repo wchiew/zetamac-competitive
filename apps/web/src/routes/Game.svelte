@@ -1,6 +1,9 @@
 <script lang="ts">
   import { DEFAULT_MODE, randomSeed } from '@zmc/shared';
   import Arena from './Arena.svelte';
+  import RoundBreakdown from './RoundBreakdown.svelte';
+  import type { RoundSummary } from '../lib/metrics';
+  import { recordCompletion, recordStart, sessionStats } from '../lib/stats.svelte';
   import { navigate } from '../lib/router.svelte';
 
   type Phase = 'idle' | 'playing' | 'done';
@@ -8,7 +11,9 @@
   let phase = $state<Phase>('idle');
   let seed = $state(0);
   let startAtEpoch = $state(0);
-  let finalScore = $state(0);
+  let summary = $state<RoundSummary | null>(null);
+
+  const solo = $derived(sessionStats.solo);
   /** Keys the arena. A counter rather than the seed, so restarting always
       remounts even in the vanishingly rare case of the same seed twice. */
   let runId = $state(0);
@@ -44,11 +49,15 @@
          rather than trying to reset a round already in flight. -->
     {#key runId}
       <Arena
-        mode={DEFAULT_MODE}
+        config={DEFAULT_MODE}
+        gameMode="solo"
+        serverVerified={false}
         {seed}
         {startAtEpoch}
-        onFinish={(score) => {
-          finalScore = score;
+        onStart={() => recordStart('solo')}
+        onFinish={(result) => {
+          summary = result;
+          recordCompletion('solo');
           phase = 'done';
         }}
       />
@@ -77,11 +86,17 @@
       Restart
     </button>
   {:else}
-    <div class="panel">
+    <div class="panel results">
       <p class="lede">Time's up</p>
-      <p class="final">{finalScore}</p>
+      <p class="final">{summary?.score ?? 0}</p>
+
+      {#if summary}
+        <RoundBreakdown {summary} />
+      {/if}
+
       <button class="primary" onclick={start}>Play again</button>
       <p class="hint">or press Enter</p>
+      <p class="counters">{solo.completed} of {solo.started} solo rounds finished this session</p>
       <button class="link" onclick={() => navigate('menu')}>Back to menu</button>
     </div>
   {/if}
@@ -115,6 +130,9 @@
     margin: 0;
     font-size: clamp(3.5rem, 14vw, 6rem);
     line-height: 1;
+    /* Overrides the body default: equal-width digits make a display-size
+       figure look loose. Tabular belongs in the table rows below, not here. */
+    font-variant-numeric: proportional-nums;
   }
 
   .primary {
@@ -134,6 +152,26 @@
     margin: 0;
     color: var(--muted);
     font-size: 0.85rem;
+  }
+
+  .counters {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.75rem;
+    opacity: 0.8;
+  }
+
+  /*
+   * Sets the action apart from the dense results above it. The margins wrap
+   * the button *and* its "or press Enter" hint as one group — spacing them
+   * apart from each other would break the hint away from what it describes.
+   */
+  .results .primary {
+    margin-top: 1.75rem;
+  }
+
+  .results .counters {
+    margin-top: 1.5rem;
   }
 
   .link {

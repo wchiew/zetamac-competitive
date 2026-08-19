@@ -8,6 +8,13 @@ export interface Problem {
   readonly text: string;
   readonly answer: number;
   readonly op: Op;
+  /**
+   * The two operands exactly as displayed. Carried separately from `text`
+   * because per-operand analysis ("slow dividing by 7") should not depend on
+   * re-parsing a display string.
+   */
+  readonly left: number;
+  readonly right: number;
 }
 
 function enabledOps(cfg: ModeConfig): Op[] {
@@ -24,7 +31,7 @@ function build(cfg: ModeConfig, rng: Rng, op: Op): Problem {
     case 'add': {
       const a = randInt(rng, cfg.addition.left.min, cfg.addition.left.max);
       const b = randInt(rng, cfg.addition.right.min, cfg.addition.right.max);
-      return { text: `${a} + ${b}`, answer: a + b, op };
+      return { text: `${a} + ${b}`, answer: a + b, op, left: a, right: b };
     }
     case 'sub': {
       // Generated as the inverse of an addition so the answer always lands
@@ -34,13 +41,13 @@ function build(cfg: ModeConfig, rng: Rng, op: Op): Problem {
       const sum = a + b;
       const subtractLeft = rng() < 0.5;
       return subtractLeft
-        ? { text: `${sum} - ${a}`, answer: b, op }
-        : { text: `${sum} - ${b}`, answer: a, op };
+        ? { text: `${sum} - ${a}`, answer: b, op, left: sum, right: a }
+        : { text: `${sum} - ${b}`, answer: a, op, left: sum, right: b };
     }
     case 'mul': {
       const a = randInt(rng, cfg.multiplication.left.min, cfg.multiplication.left.max);
       const b = randInt(rng, cfg.multiplication.right.min, cfg.multiplication.right.max);
-      return { text: `${a} × ${b}`, answer: a * b, op };
+      return { text: `${a} × ${b}`, answer: a * b, op, left: a, right: b };
     }
     case 'div': {
       // Inverse of a multiplication, so the quotient is always a whole number.
@@ -49,7 +56,7 @@ function build(cfg: ModeConfig, rng: Rng, op: Op): Problem {
       // skill than dividing by 12, and zetamac never asks for it.
       const a = randInt(rng, cfg.multiplication.left.min, cfg.multiplication.left.max);
       const b = randInt(rng, cfg.multiplication.right.min, cfg.multiplication.right.max);
-      return { text: `${a * b} ÷ ${a}`, answer: b, op };
+      return { text: `${a * b} ÷ ${a}`, answer: b, op, left: a * b, right: a };
     }
   }
 }

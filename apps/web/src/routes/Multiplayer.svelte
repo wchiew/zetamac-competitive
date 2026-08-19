@@ -1,16 +1,34 @@
 <script lang="ts">
   import { DEFAULT_MODE, JOIN_CODE_LENGTH, MAX_PLAYERS, MIN_PLAYERS } from '@zmc/shared';
   import Arena from './Arena.svelte';
+  import RoundBreakdown from './RoundBreakdown.svelte';
+  import type { RoundSummary } from '../lib/metrics';
+  import { recordCompletion, recordStart, sessionStats } from '../lib/stats.svelte';
   import { net } from '../lib/net.svelte';
   import { navigate } from '../lib/router.svelte';
   import { settings } from '../lib/settings.svelte';
 
   let joinCode = $state('');
   let now = $state(Date.now());
+  /** Your own timings for the round just played; the server owns the scores. */
+  let summary = $state<RoundSummary | null>(null);
 
   const canStart = $derived(net.isHost && net.players.filter((p) => p.connected).length >= MIN_PLAYERS);
   const joinCodeReady = $derived(joinCode.length === JOIN_CODE_LENGTH);
   const busy = $derived(net.phase === 'connecting');
+  const multi = $derived(sessionStats.multiplayer);
+
+  /**
+   * The round length comes from the server, not from this build's DEFAULT_MODE.
+   * The server owns the deadline, so assuming both agree would silently desync
+   * the displayed clock from the real one whenever they differ — which a dev
+   * round-length override makes routine.
+   */
+  const roundConfig = $derived(
+    net.durationSeconds > 0
+      ? { ...DEFAULT_MODE, durationSeconds: net.durationSeconds }
+      : DEFAULT_MODE,
+  );
   const fillSecondsLeft = $derived(
     net.fillDeadlineEpoch === 0 ? null : Math.max(0, Math.ceil((net.fillDeadlineEpoch - now) / 1000)),
   );
@@ -142,6 +160,13 @@
             </li>
           {/each}
         </ol>
+
+        {#if summary}
+          <RoundBreakdown {summary} />
+        {/if}
+        <p class="counters">
+          {multi.completed} of {multi.started} multiplayer rounds finished this session
+        </p>
       {:else}
         <ul class="roster">
           {#each net.players as player (player.id)}
@@ -190,12 +215,19 @@
          reusing one whose timer is already running. -->
     {#key net.seed}
       <Arena
-        mode={DEFAULT_MODE}
+        config={roundConfig}
+        gameMode="multiplayer"
+        serverVerified={true}
         seed={net.seed}
         startAtEpoch={net.startAtEpoch}
         players={net.players}
         selfId={net.playerId}
+        onStart={() => recordStart('multiplayer')}
         onProgress={(solved) => net.reportSolved(solved)}
+        onFinish={(result) => {
+          summary = result;
+          recordCompletion('multiplayer');
+        }}
       />
     {/key}
   {/if}
@@ -384,6 +416,13 @@
     margin: 0;
     color: var(--muted);
     font-size: 0.85rem;
+  }
+
+  .counters {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.75rem;
+    opacity: 0.8;
   }
 
   .error {

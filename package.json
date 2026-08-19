@@ -8,8 +8,8 @@
   ],
   "scripts": {
     "dev": "concurrently -n server,web -c cyan,magenta \"npm:dev:server\" \"npm:dev:web\"",
-    "dev:web": "npm run dev --workspace @zmc/web",
-    "dev:server": "npm run dev --workspace @zmc/server",
+    "dev:web": "cross-env VITE_ROUND_SECONDS=30 npm run dev --workspace @zmc/web",
+    "dev:server": "cross-env ROUND_SECONDS=30 npm run dev --workspace @zmc/server",
     "build": "npm run build --workspace @zmc/web",
     "start": "npm run build && npm run start --workspace @zmc/server",
     "tunnel": "node scripts/tunnel.mjs",
@@ -19,6 +19,7 @@
   },
   "devDependencies": {
     "concurrently": "^9.1.2",
+    "cross-env": "^7.0.3",
     "typescript": "^5.6.3"
   }
 }

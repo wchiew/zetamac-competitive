@@ -2,6 +2,7 @@ export { mulberry32, randInt, pick, randomSeed, type Rng } from './prng.js';
 export {
   DEFAULT_MODE,
   DEFAULT_MODE_KEY,
+  SHIPPED_ROUND_SECONDS,
   modeKey,
   type ModeConfig,
   type Range,

@@ -20,6 +20,10 @@ npm install
 npm run dev      # game server on :8787, web on http://localhost:5173
 ```
 
+`npm run dev` uses **30-second rounds** so you are not waiting two minutes to
+see a results screen. Production (`npm start`) is the real 120. Override with
+`ROUND_SECONDS` / `VITE_ROUND_SECONDS`.
+
 `npm run dev` starts both processes. Vite proxies `/ws` to the game server, so
 the browser only ever talks to its own origin.
 

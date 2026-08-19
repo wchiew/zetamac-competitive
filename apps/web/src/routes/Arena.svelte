@@ -1,6 +1,7 @@
 <script lang="ts">
   import { tick, untrack } from 'svelte';
   import { ProblemGenerator, type ModeConfig } from '@zmc/shared';
+  import { RoundMetrics, summarize, type GameMode, type RoundSummary } from '../lib/metrics';
   import { settings } from '../lib/settings.svelte';
 
   interface Contender {
@@ -11,23 +12,33 @@
   }
 
   let {
-    mode,
+    // Named `config` rather than `mode` so it cannot be confused with
+    // `gameMode` — one is the problem ruleset, the other is solo vs lobby.
+    config,
+    gameMode,
+    serverVerified,
     seed,
     startAtEpoch,
     players = [],
     selfId = '',
+    onStart,
     onProgress,
     onFinish,
   }: {
-    mode: ModeConfig;
+    config: ModeConfig;
+    gameMode: GameMode;
+    serverVerified: boolean;
     seed: number;
     /** Round start in Date.now() terms. In the past means start immediately. */
     startAtEpoch: number;
     /** Everyone in the round, including you. Empty in solo. */
     players?: Contender[];
     selfId?: string;
+    /** Fires when the clock actually starts, which is what "started" counts. */
+    onStart?: () => void;
     onProgress?: (solvedThrough: number) => void;
-    onFinish?: (score: number) => void;
+    /** Fires only when the round runs to the clock — an abandoned round emits nothing. */
+    onFinish?: (summary: RoundSummary) => void;
   } = $props();
 
   // Reactive state is deliberately coarse: it changes on a correct answer
@@ -70,11 +81,14 @@
   let endTimer = 0;
   // $state only because bind:this writes to it; it is never read in markup.
   let inputEl = $state<HTMLInputElement | null>(null);
+  // Plain object on purpose — this is written from the keystroke handler.
+  const metrics = new RoundMetrics();
 
   function nextProblem(): void {
     const problem = generator!.next();
     problemText = problem.text;
     answer = problem.answer;
+    metrics.show(problem, performance.now());
     if (inputEl) inputEl.value = '';
   }
 
@@ -101,6 +115,8 @@
   async function begin(): Promise<void> {
     if (phase !== 'countdown') return;
     phase = 'running';
+    metrics.begin(performance.now());
+    onStart?.();
     endTimer = setTimeout(finish, Math.max(0, endsAt - performance.now())) as unknown as number;
     // The input only exists once the phase change has been flushed to the DOM.
     await tick();
@@ -111,9 +127,18 @@
   function finish(): void {
     if (phase === 'done') return;
     clearTimers();
+    // Close the problem that was on screen when the clock ran out; it counts
+    // as attempted-but-unsolved rather than being dropped.
+    metrics.close(null);
     secondsLeft = 0;
     phase = 'done';
-    onFinish?.(score);
+    onFinish?.(
+      summarize(metrics.records, score, {
+        gameMode,
+        serverVerified,
+        durationSeconds: config.durationSeconds,
+      }),
+    );
   }
 
   function clearTimers(): void {
@@ -131,9 +156,15 @@
    */
   function onInput(): void {
     if (phase !== 'running' || !inputEl) return;
+    const now = performance.now();
+    // Records the first keystroke for this problem, separating thinking time
+    // from typing time. Writes a plain field, so no render is triggered.
+    metrics.keyed(now);
+
     const raw = inputEl.value.trim();
     if (raw === '' || !/^-?\d+$/.test(raw)) return;
     if (Number(raw) !== answer) return;
+    metrics.close(now);
     score++;
     onProgress?.(score);
     nextProblem();
@@ -164,10 +195,10 @@
     // the setup untracked. `begin()` both reads and writes `phase`, so without
     // untrack the effect would depend on state it mutates and re-run forever,
     // clearing and rebuilding the deadline timer on every pass.
-    const config = mode;
+    const roundConfig = config;
     const gameSeed = seed;
     const epoch = startAtEpoch;
-    untrack(() => setup(config, gameSeed, epoch));
+    untrack(() => setup(roundConfig, gameSeed, epoch));
     return clearTimers;
   });
 </script>
@@ -217,6 +248,8 @@
     margin: 0;
     font-size: clamp(4rem, 16vw, 7rem);
     line-height: 1;
+    /* Proportional figures at display size; see the results score. */
+    font-variant-numeric: proportional-nums;
   }
 
   .hud {

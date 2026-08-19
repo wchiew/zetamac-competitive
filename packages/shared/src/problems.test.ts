@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_MODE, DEFAULT_MODE_KEY, modeKey, type ModeConfig } from './modes.js';
+import {
+  DEFAULT_MODE,
+  DEFAULT_MODE_KEY,
+  SHIPPED_ROUND_SECONDS,
+  modeKey,
+  type ModeConfig,
+} from './modes.js';
 import { ProblemGenerator, generateProblems, type Op } from './problems.js';
 
 const SAMPLE = 5000;
@@ -55,6 +61,16 @@ describe('answers are correct', () => {
         : symbol === '×' ? left * right
         : left / right;
       expect(p.answer, p.text).toBe(expected);
+    }
+  });
+
+  it('exposes operands that match the displayed text', () => {
+    // Metrics read `left`/`right` rather than re-parsing `text`, so the two
+    // must never disagree.
+    for (const p of generateProblems(DEFAULT_MODE, 321, SAMPLE)) {
+      const { left, right } = parse(p.text);
+      expect(p.left, p.text).toBe(left);
+      expect(p.right, p.text).toBe(right);
     }
   });
 
@@ -130,7 +146,15 @@ describe('presentation', () => {
 
 describe('mode keys', () => {
   it('is stable for the zetamac default', () => {
-    // Pinned: changing this silently splits the leaderboard in two.
+    // Pinned: changing this silently splits the leaderboard in two. Built from
+    // the shipped duration rather than DEFAULT_MODE_KEY so a dev round-length
+    // override cannot make the guard vacuous.
+    const shipped = { ...DEFAULT_MODE, durationSeconds: SHIPPED_ROUND_SECONDS };
+    expect(modeKey(shipped)).toBe('d120|a|s|2-100x2-100|m|v|2-12x2-100');
+  });
+
+  it('defaults to the shipped duration when nothing overrides it', () => {
+    expect(DEFAULT_MODE.durationSeconds).toBe(SHIPPED_ROUND_SECONDS);
     expect(DEFAULT_MODE_KEY).toBe('d120|a|s|2-100x2-100|m|v|2-12x2-100');
   });
 

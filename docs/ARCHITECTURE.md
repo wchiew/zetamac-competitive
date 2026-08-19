@@ -112,6 +112,26 @@ all dropped mid-round kept them in the map for the standings, so it was never
 reaped — an invisible leak that matchmaking would have turned into handing out
 rooms full of ghosts.
 
+## Round length in dev
+
+`npm run dev` runs 30-second rounds so reaching a results screen does not cost
+two minutes; `npm start` and any production build stay at 120.
+
+Set by `ROUND_SECONDS` (server) and `VITE_ROUND_SECONDS` (client), both applied
+in the root dev scripts via `cross-env` — `VAR=value cmd` is not portable to
+Windows shells. `configuredRoundSeconds()` in `packages/shared/src/modes.ts`
+probes both `import.meta.env` and `process.env` defensively, since the module is
+shared and each is absent in the other's runtime.
+
+The override deliberately changes `DEFAULT_MODE_KEY` to `d30|…`, so a dev score
+is a different, non-comparable mode and can never land beside a real one. The
+pinned mode-key test builds its expectation from `SHIPPED_ROUND_SECONDS` rather
+than the live default, so the override cannot make that guard vacuous.
+
+**The client takes the round length from the server in multiplayer**, not from
+its own `DEFAULT_MODE`. The server owns the deadline, so assuming the two agree
+would desync the displayed clock from the real one the moment they differ.
+
 ## Mode keys
 
 Scores are only comparable within an identical config — 60 correct on
@@ -138,6 +158,60 @@ daily_best     (day, mode_key, user_id, score)             -- composite PK
   daily board a single index scan rather than a time-window aggregate.
 - **RLS**: clients are read-only. All writes go through the server using the
   service-role key. The browser must never be able to insert a score row.
+
+## Metrics
+
+Collected in `apps/web/src/lib/metrics.ts`, split into two tiers on purpose.
+
+**Per-problem records — in memory, shown on the results screen, never stored.**
+Operation, both operands, answer, answer digit count, time-to-first-key,
+time-to-solve, and the offset from round start. At that granularity the
+interesting question is "how did this run go", not "how have I done over a
+year", and a year of it is a lot of rows for little value.
+
+Time-to-first-key exists to separate **thinking from typing**: a four-digit
+answer takes longer to enter regardless of how fast it was computed, so
+without the split, long answers masquerade as slow arithmetic.
+
+**Aggregates — what a profile stores (M2).**
+
+| | |
+|---|---|
+| `mode_key` | scores only compare within an identical config |
+| `game_mode` | `solo` or `multiplayer` — counts are kept apart, never pooled |
+| `score` | |
+| `games_started` / `games_completed` | **per game mode.** A round is started when its clock is, completed only if it runs out |
+| per-operation median solve time | medians, not means — one tab-away ruins a mean |
+| `placement`, `lobby_size`, `winning_score` | multiplayer only; win rate needs them |
+| `server_verified` | whether the score came from the authoritative server |
+
+**`game_mode` and `server_verified` are separate fields, not one.** They
+coincide today — solo is local, multiplayer is verified — but M3 moves ranked
+solo into a server room of one, at which point a solo round is verified too.
+Collapsing them now would need a migration then.
+
+**Completion rates are not pooled across modes.** A solo round is abandoned by
+choice; a multiplayer round can end because the lobby emptied or a connection
+dropped. One combined ratio would describe neither.
+
+**Accuracy is deliberately not tracked.** zetamac auto-submits on exact match,
+so there is no wrong-answer event to count, and any definition would have to be
+invented (e.g. "a digit that breaks the answer prefix"). Not worth the
+ambiguity.
+
+Two behaviours worth knowing:
+
+- **Restarting abandons a round.** The restart button starts a new one, so
+  warming up with several restarts moves `games_started` without moving
+  `games_completed`. That is the honest reading, but it means the ratio is not
+  a "quit rate".
+- **Unsolved problems are recorded, not dropped.** Whatever was on screen when
+  the clock ran out is closed with a null solve time, so it counts as attempted
+  but contributes no timing — its duration reflects the timer, not the player.
+
+The accumulator writes plain objects, never `$state`. A reactive write in the
+keystroke handler would put a render between a key and the screen, which is
+exactly what the input path is designed to avoid.
 
 ## Settings
 

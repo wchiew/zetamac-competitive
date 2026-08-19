@@ -22,9 +22,32 @@ export interface ModeConfig {
   readonly division: { readonly enabled: boolean };
 }
 
+export const SHIPPED_ROUND_SECONDS = 120;
+
+/**
+ * Round length, overridable so the dev loop does not require sitting through a
+ * full round to reach the results screen.
+ *
+ * Read from both runtimes because this module is shared: Vite inlines
+ * `import.meta.env` at build time, Node reads `process.env`. Both are probed
+ * defensively, since each is absent in the other's environment.
+ *
+ * This changes DEFAULT_MODE_KEY, which is correct — a 30s round is genuinely a
+ * different, non-comparable mode, so dev scores can never land on a
+ * leaderboard beside real ones.
+ */
+function configuredRoundSeconds(): number {
+  const viteEnv = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
+  const nodeEnv = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process
+    ?.env;
+  const raw = viteEnv?.['VITE_ROUND_SECONDS'] ?? nodeEnv?.['ROUND_SECONDS'];
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : SHIPPED_ROUND_SECONDS;
+}
+
 /** Stock zetamac: 120s, addition 2-100 x 2-100, multiplication 2-12 x 2-100, all four operations. */
 export const DEFAULT_MODE: ModeConfig = {
-  durationSeconds: 120,
+  durationSeconds: configuredRoundSeconds(),
   addition: { enabled: true, left: { min: 2, max: 100 }, right: { min: 2, max: 100 } },
   subtraction: { enabled: true },
   multiplication: { enabled: true, left: { min: 2, max: 12 }, right: { min: 2, max: 100 } },
