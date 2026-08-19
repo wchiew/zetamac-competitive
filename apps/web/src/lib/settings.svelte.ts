@@ -26,6 +26,11 @@ export interface Settings extends Palette {
   custom: Palette;
   showTimer: boolean;
   showScore: boolean;
+  /**
+   * Lobby display name. Lives here only until M2 — once accounts exist the
+   * profile username replaces it.
+   */
+  playerName: string;
 }
 
 export const FONTS: ReadonlyArray<{ key: string; label: string; stack: string }> = [
@@ -62,6 +67,7 @@ function defaults(): Settings {
     custom: { background: base.background, foreground: base.foreground, accent: base.accent },
     showTimer: true,
     showScore: true,
+    playerName: '',
   };
 }
 

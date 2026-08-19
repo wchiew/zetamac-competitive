@@ -1,7 +1,9 @@
 <script lang="ts">
   import { initRouter, navigate, router, type Route } from './lib/router.svelte';
   import { initSettingsEffects } from './lib/settings.svelte';
+  import Menu from './routes/Menu.svelte';
   import Game from './routes/Game.svelte';
+  import Multiplayer from './routes/Multiplayer.svelte';
   import Settings from './routes/Settings.svelte';
   import Placeholder from './routes/Placeholder.svelte';
 
@@ -9,7 +11,7 @@
   initSettingsEffects();
 
   const NAV: ReadonlyArray<{ route: Route; label: string }> = [
-    { route: 'game', label: 'play' },
+    { route: 'menu', label: 'play' },
     { route: 'leaderboard', label: 'leaderboard' },
     { route: 'profile', label: 'profile' },
     { route: 'settings', label: 'settings' },
@@ -17,7 +19,7 @@
 </script>
 
 <nav>
-  <button class="brand" onclick={() => navigate('game')}>
+  <button class="brand" onclick={() => navigate('menu')}>
     zetamac<span class="dim">/competitive</span>
   </button>
   <div class="links">
@@ -30,8 +32,12 @@
 </nav>
 
 <main>
-  {#if router.route === 'game'}
+  {#if router.route === 'menu'}
+    <Menu />
+  {:else if router.route === 'solo'}
     <Game />
+  {:else if router.route === 'multiplayer'}
+    <Multiplayer />
   {:else if router.route === 'settings'}
     <Settings />
   {:else if router.route === 'leaderboard'}

@@ -49,12 +49,68 @@ Supporting details:
   (>8 answers/sec is physically impossible).
 - **Broadcast** — a scores snapshot to the room at ~4Hz. JSON over WS; this is
   a few hundred bytes per second and does not warrant a binary protocol.
-- **Solo runs use the same server room.** If solo scores bypassed the server,
-  the leaderboard would be spoofable with a single HTTP request.
+- **The rate cap is re-evaluated over time, not applied once.** A player who
+  solves a burst in the opening seconds legitimately exceeds the ceiling at
+  that instant. Clamping their claim on arrival destroys those answers
+  permanently, because a client whose total has not changed never sends again.
+  The server stores the raw `claimed` total and recomputes
+  `score = min(claimed, ceiling)` on every broadcast and at the deadline.
+
+**Solo runs are local for now.** They bypass the server entirely, which is
+fine while no leaderboard exists. **This must change in M3**: the moment scores
+are ranked, a solo run that never touches the server is spoofable with a single
+HTTP request, so ranked solo has to move into a server room of one.
 
 **Known limit:** because answers are derivable client-side, real-time
 submission checks defeat replay and end-of-round dumping, but not a determined
-bot. Full anti-cheat is out of scope.
+bot. The cap bounds a cheat rather than detecting it — over a 120s round the
+ceiling is still 962. Full anti-cheat is out of scope.
+
+## Matchmaking
+
+Selecting Multiplayer sends `matchmake`; the server drops you into an open
+public lobby or opens one. Private lobbies (`create` + join code) still exist
+alongside it for playing with friends, and are never handed out by the
+matchmaker.
+
+**Selection** is fullest-joinable-first so rooms reach `MIN_PLAYERS` sooner,
+with oldest-first as a tie-break so no room is starved. The candidate set is
+**derived by scanning** rather than cached — a cached open-room set is exactly
+the thing that drifts out of sync with the truth.
+
+**Auto-start.** With strangers there is no host to press start, and a lone AFK
+host would wedge the lobby. Reaching `MIN_PLAYERS` arms a 10s fill window;
+hitting `MAX_PLAYERS` starts immediately. The window does *not* reset when
+someone joins, so it cannot be extended indefinitely. Dropping back below
+`MIN_PLAYERS` cancels it.
+
+### Concurrency
+
+Node is single-threaded and a WebSocket message handler runs to completion
+without interleaving, so selecting a room and adding the player to it is
+already atomic — two players cannot both take the last slot.
+
+**That holds only while `findOrCreate` → `add` stays synchronous.** An `await`
+anywhere between them lets the event loop interleave and reintroduces the
+race. If async work is ever needed (a profile lookup in M2), do it *before*
+selection and re-validate the room afterwards.
+
+What does interleave is **timers**, which run between message handlers. That is
+the real hazard surface, and it is what these invariants target:
+
+| | Invariant | Enforced by |
+|---|---|---|
+| I1 | `players.size <= MAX_PLAYERS` | `isFull` checked before every `add` |
+| I2 | in pool ⟺ `isPublic && phase === 'lobby' && !isFull` | `isOpenForMatchmaking`, derived |
+| I3 | `hostId` is `''` or a connected member | reassigned in `remove` |
+| I4 | at most one fill window per room | `#syncFillWindow` reconciles, sole owner |
+| I5 | a room with no connected players is disposed | `onEmpty` + periodic reaper |
+| I6 | a player is in at most one room | `session.room` guard |
+
+`isEmpty` counts **connected** players. Before that fix, a room whose players
+all dropped mid-round kept them in the map for the standings, so it was never
+reaped — an invisible leak that matchmaking would have turned into handing out
+rooms full of ghosts.
 
 ## Mode keys
 
@@ -101,6 +157,10 @@ The game screen is held to a stricter standard than the rest of the app:
   correct — roughly once per second, not once per keystroke.
 - The countdown runs on `requestAnimationFrame` but only assigns `secondsLeft`
   when the displayed integer changes, so ~59 of every 60 frames cost nothing.
+- **rAF is display only.** Browsers pause it entirely in a hidden tab, so the
+  round start and the deadline are driven by `setTimeout`, which still fires.
+  Every painted value is recomputed from the clock rather than accumulated, so
+  a tab that was hidden corrects itself the moment it comes back.
 - The problem row is a three-column grid with the `=` pinned to centre, so the
   answer field never moves between problems regardless of expression width.
 
@@ -124,6 +184,8 @@ M0 and M1 require no accounts and run entirely on localhost.
 
 - **M0 — done.** Monorepo, shared problem generator, solo game loop, settings
   page on localStorage.
-- **M1** — `apps/server`, WS lobbies with 4-char join codes, live opponent scores.
+- **M1 — done.** `apps/server` (Fastify + ws), lobbies with 4-digit join codes,
+  server-authoritative scoring, live opponent scores, standings.
 - **M2** — Supabase auth, profiles, game persistence, stats counters.
-- **M3** — all-time and daily leaderboards.
+- **M3** — all-time and daily leaderboards, plus moving ranked solo runs into a
+  server room so they can be trusted.

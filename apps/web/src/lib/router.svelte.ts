@@ -2,13 +2,20 @@
  * Hash router. Deliberately tiny — there are only a handful of routes and a
  * router dependency would outweigh the app it routes.
  */
-export type Route = 'game' | 'settings' | 'leaderboard' | 'profile';
+export type Route = 'menu' | 'solo' | 'multiplayer' | 'settings' | 'leaderboard' | 'profile';
 
-const ROUTES: readonly Route[] = ['game', 'settings', 'leaderboard', 'profile'];
+const ROUTES: readonly Route[] = [
+  'menu',
+  'solo',
+  'multiplayer',
+  'settings',
+  'leaderboard',
+  'profile',
+];
 
 function current(): Route {
   const hash = location.hash.replace(/^#\/?/, '');
-  return (ROUTES as readonly string[]).includes(hash) ? (hash as Route) : 'game';
+  return (ROUTES as readonly string[]).includes(hash) ? (hash as Route) : 'menu';
 }
 
 export const router = $state<{ route: Route }>({ route: current() });

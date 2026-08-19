@@ -8,17 +8,32 @@ the instant they match — no Enter key.
 
 ## Status
 
-**M0 — playable solo.** No backend and no accounts yet; see
+**M1 — solo and 2–4 player multiplayer.** No accounts or leaderboards yet; see
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full design and milestones.
 
 ## Running it
 
-Requires Node 20+ (developed on 24).
+Requires Node 20+ (developed on 24). No external accounts needed.
 
 ```sh
 npm install
-npm run dev      # http://localhost:5173
+npm run dev      # game server on :8787, web on http://localhost:5173
 ```
+
+`npm run dev` starts both processes. Vite proxies `/ws` to the game server, so
+the browser only ever talks to its own origin.
+
+To try multiplayer locally, open two tabs and hit "Find a game" in both, or
+create a private lobby and join with its 4-digit code.
+
+## Playing with other people
+
+```sh
+npm start        # builds the client and serves everything on :8787
+npm run tunnel   # in a second terminal — prints a public https URL to share
+```
+
+See [docs/DEPLOY.md](docs/DEPLOY.md) for the details and for real hosting.
 
 Other commands:
 
@@ -31,7 +46,8 @@ npm run build    # production bundle
 ## Layout
 
 ```
-packages/shared/   PRNG, problem generator, mode config  — shared by client and server
+packages/shared/   PRNG, problem generator, mode config, wire protocol
+apps/server/       Fastify + ws game server — authoritative on scores and timing
 apps/web/          Svelte client
 ```
 
