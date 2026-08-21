@@ -15,7 +15,7 @@
     "tunnel": "node scripts/tunnel.mjs",
     "preview": "npm run preview --workspace @zmc/web",
     "check": "npm run check --workspace @zmc/web && npm run check --workspace @zmc/server",
-    "test": "npm run test --workspace @zmc/shared"
+    "test": "npm run test --workspace @zmc/shared && npm run test --workspace @zmc/server"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",

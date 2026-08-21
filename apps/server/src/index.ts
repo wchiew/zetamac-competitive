@@ -11,6 +11,7 @@ import {
   type ClientMessage,
   type ServerMessage,
 } from '@zmc/shared';
+import { createPersistence } from './persistence.js';
 import { RoomRegistry, type Room } from './rooms.js';
 
 const PORT = Number(process.env['PORT'] ?? 8787);
@@ -30,9 +31,17 @@ const CLIENT_DIST = join(dirname(fileURLToPath(import.meta.url)), '../../web/dis
 
 const app = Fastify({ logger: false });
 const registry = new RoomRegistry();
+// Not yet wired to rounds: recording a game needs a user to attribute it to,
+// which arrives with auth. Constructed here so a misconfiguration is announced
+// at boot rather than discovered when the first score fails to save.
+const persistence = createPersistence();
 
 // `rooms` is here so leak regressions are observable from outside the process.
-app.get('/health', async () => ({ ok: true, rooms: registry.size }));
+app.get('/health', async () => ({
+  ok: true,
+  rooms: registry.size,
+  persistence: persistence.enabled,
+}));
 
 // Serving the built client from this same process keeps everything on one
 // origin, so the client's `wss://${location.host}/ws` works untouched — no

@@ -213,6 +213,65 @@ The accumulator writes plain objects, never `$state`. A reactive write in the
 keystroke handler would put a render between a key and the screen, which is
 exactly what the input path is designed to avoid.
 
+## Data model (M2)
+
+Migrations live in `supabase/migrations/`.
+
+```
+profiles              id → auth.users, username (citext, unique), settings jsonb
+games                 one row per round STARTED; completed flips when the clock runs out
+game_operation_stats  (game_id, op) → solved, median_solve_ms
+profile_stats         (user_id, mode_key, game_mode) → started, completed,
+                      high_score, score_sum, wins
+daily_best            (day, mode_key, user_id) → best score that UTC day
+```
+
+The migrations are tested in `apps/server/test/schema.test.ts`, which applies
+them **unmodified** to a real Postgres (PGlite, in-process WASM — no Docker, no
+Supabase project) and exercises the RPCs: idempotency, best-score retention,
+solo/multiplayer counter isolation, and unverified scores being kept off the
+daily board. `test/supabase-shim.sql` supplies only what the migrations
+reference — `auth.users`, `auth.uid()`, and the two roles — so what runs in the
+test is what ships.
+
+**RLS enforcement is not covered.** PGlite runs as superuser and bypasses row
+security, so the policies are checked for validity but not for effect.
+
+### Decisions worth knowing
+
+**A game row is inserted when the round starts, not when it finishes.**
+Writing only on completion makes `games_started` unknowable — an abandoned
+round would simply never exist — and inflates every average, because only
+rounds worth finishing get recorded. Abandoned rounds are left as
+`completed = false`.
+
+**Aggregates move in the same transaction as the game row.** `start_game()`
+and `complete_game()` exist for that reason: four separate statements from Node
+can fail after the second, and a denormalized counter that has drifted has no
+way to notice. `complete_game()` is idempotent (`and not completed`), so a
+retried call after a network blip cannot double-count.
+
+**No table has an insert or update policy.** Every write goes through the
+server's service-role key. A browser that can insert its own score row makes
+every leaderboard meaningless, and no client-side check prevents that. The
+consequence: saving history requires the server, though playing does not.
+
+**Leaderboards filter on `server_verified`**, which today means multiplayer
+only — a solo score is computed entirely in the browser. This is a `where`
+clause, not a structural choice, so M3 routing ranked solo through a server
+room needs no migration.
+
+**Own history is private; aggregates are public.** `games` is readable only by
+its owner, while `profile_stats` and `daily_best` are world-readable so
+leaderboards and profile pages work.
+
+**Ties count as a win for everyone tied**, matching the dense ranking already
+used in `toStandings()`.
+
+**New accounts get a generated handle** (`player_a3f9k2c1`) rather than a
+nullable username. Otherwise every join has to cope with a half-built row, and
+someone who abandons onboarding is invisible to their own history.
+
 ## Settings
 
 Local-first. `localStorage` is the source of truth for first paint (applied by
